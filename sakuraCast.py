@@ -9,6 +9,7 @@ import http.server
 import subprocess
 import time
 from collections import deque
+import platform
 
 VIDEO_MIME = "video/mp4"
 
@@ -42,17 +43,19 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
     encoder = "libx264"
     hw_args = []
     aspect_ratio = "16/9"
+    resolution = "640x480"
 
     def do_GET(self):
         clean_path = self.path.split('?')[0]
 
         if clean_path == "/thumb.jpg":
-            if os.path.exists("thumb.jpg"):
+            thumb_path = os.path.join(SCRIPT_DIR, "thumb.jpg")
+            if os.path.exists(thumb_path):
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                with open("thumb.jpg", "rb") as f:
+                with open(thumb_path, "rb") as f:
                     self.wfile.write(f.read())
                 return
             else:
@@ -73,28 +76,23 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
             )
             sub_filter = f"setpts=PTS+{offset}/TB,subtitles='{escaped_path}':{crt_style},setpts=PTS-{offset}/TB,"
 
-        ar = self.aspect_ratio 
-        
-        if ar == "4/3":
-            res = "640:480"
-            target_dar = "4/3"
-        else:
-            res = "1280:720"
-            target_dar = "16/9"
+        res = FFmpegStreamHandler.resolution
+        target_dar = self.aspect_ratio
+        res_w, res_h = res.split('x')
 
         if "vaapi" in self.encoder:
-            v_filter = f"format=nv12,{sub_filter}hwupload,scale_vaapi=w={res.split(':')[0]}:h={res.split(':')[1]},setsar=1,setdar={target_dar}"
-        elif "nvenc" in self.encoder:
-            v_filter = f"{sub_filter}scale={res},setsar=1,setdar={target_dar}"
-        else:
-            v_filter = f"{sub_filter}scale={res},setsar=1,setdar={target_dar},format=yuv420p"
+            v_filter = f"format=nv12,{sub_filter}hwupload,scale_vaapi=w={res_w}:h={res_h},setsar=1,setdar={target_dar}"
+        elif "videotoolbox" in self.encoder:
+            v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar}"
+            v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar},format=yuv420p"
 
         ffmpeg_cmd = [
-            "ffmpeg", "-ss", str(self.seek_time), "-i", self.video_file
+            "ffmpeg", "-ss", str(self.seek_time)
         ] + self.hw_args + [
+            "-i", self.video_file,
             "-vf", v_filter,
             "-c:v", self.encoder,
-            "-preset", "ultrafast",
+            "-preset", "ultrafast" if "libx264" in self.encoder else "fast",
             "-c:a", "aac", "-b:a", "128k",
             "-f", "mp4", 
             "-movflags", "frag_keyframe+empty_moov+default_base_moof",
@@ -106,17 +104,17 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
-        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=None, bufsize=10**6)
+        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**6)
         
         try:
             while True:
                 chunk = proc.stdout.read(64*1024)
                 if not chunk: break
                 self.wfile.write(chunk)
-        except Exception:
+        except (ConnectionResetError, BrokenPipeError):
             pass
         finally:
-            proc.kill()
+            proc.terminate()
 
 class ChromecastGui:
     def __init__(self, root):
@@ -143,11 +141,59 @@ class ChromecastGui:
         self.selected_subtitles = None
 
     def generate_thumbnail(self, video_path):
-        cmd = ["ffmpeg", "-y", "-i", video_path, "-ss", "00:00:05", "-vframes", "1", "-q:v", "2", "thumb.jpg"]
+        thumb_path = os.path.join(SCRIPT_DIR, "thumb.jpg")
+        cmd = ["ffmpeg", "-y", "-i", video_path, "-ss", "00:00:05", "-vframes", "1", "-q:v", "2", thumb_path]
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            print(f"Thumbnail failed: {e}")
+        except: pass
+
+    def detect_hardware_acceleration(self):
+        system = platform.system()
+        found_hw = False
+
+        if system == "Windows":
+            for enc in ["h264_nvenc", "h264_qsv", "h264_amf"]:
+                if self.test_ffmpeg_encoder(enc):
+                    FFmpegStreamHandler.encoder = enc
+                    found_hw = True
+                    break
+        
+        elif system == "Darwin":
+            if self.test_ffmpeg_encoder("h264_videotoolbox"):
+                FFmpegStreamHandler.encoder = "h264_videotoolbox"
+                found_hw = True
+
+        elif system in ["Linux", "FreeBSD"]:
+            va_args = ["-vaapi_device", "/dev/dri/renderD128", "-vf", "format=nv12,hwupload"]
+            if os.path.exists("/dev/dri/renderD128"):
+                if self.test_ffmpeg_encoder("h264_vaapi", va_args):
+                    FFmpegStreamHandler.encoder = "h264_vaapi"
+                    FFmpegStreamHandler.hw_args = ["-vaapi_device", "/dev/dri/renderD128"]
+                    found_hw = True
+            
+            if not found_hw and self.test_ffmpeg_encoder("h264_nvenc"):
+                FFmpegStreamHandler.encoder = "h264_nvenc"
+                found_hw = True
+
+        if not found_hw:
+            FFmpegStreamHandler.encoder = "libx264"
+            FFmpegStreamHandler.hw_args = []
+        
+        self.status_var.set(f"Encoder: {FFmpegStreamHandler.encoder}")
+        print(f"OS: {system} | Selected: {FFmpegStreamHandler.encoder}")
+
+    def test_ffmpeg_encoder(self, encoder_name, extra_args=[]):
+        test_cmd = [
+            "ffmpeg", "-y", 
+            "-f", "lavfi", "-i", "color=c=black:s=640x480", 
+            "-frames:v", "1"
+        ] + extra_args + ["-c:v", encoder_name, "-f", "null", "-"]
+        
+        try:
+            res = subprocess.run(test_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return res.returncode == 0
+        except: 
+            return False
 
     def load_subtitles(self):
         file = filedialog.askopenfilename(filetypes=[("Subtitle files", "*.srt")])
@@ -155,27 +201,6 @@ class ChromecastGui:
             self.selected_subtitles = file
             self.sub_var.set(os.path.basename(file))
             FFmpegStreamHandler.subtitle_file = file
-
-    def detect_hardware_acceleration(self):
-            if self.test_ffmpeg_encoder("h264_vaapi", ["-vaapi_device", "/dev/dri/renderD128", "-vf", "format=nv12,hwupload"]):
-                FFmpegStreamHandler.encoder = "h264_vaapi"
-                FFmpegStreamHandler.hw_args = ["-vaapi_device", "/dev/dri/renderD128"]
-                return
-
-            if self.test_ffmpeg_encoder("h264_nvenc"):
-                FFmpegStreamHandler.encoder = "h264_nvenc"
-                FFmpegStreamHandler.hw_args = []
-                return
-            
-            FFmpegStreamHandler.encoder = "libx264"
-            FFmpegStreamHandler.hw_args = []
-
-    def test_ffmpeg_encoder(self, encoder_name, extra_args=[]):
-        test_cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=640x480", "-frames:v", "1"] + extra_args + ["-c:v", encoder_name, "-f", "null", "-"]
-        try:
-            res = subprocess.run(test_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return res.returncode == 0
-        except: return False
 
     def apply_styles(self):
         style = ttk.Style()
@@ -230,18 +255,27 @@ class ChromecastGui:
         self.device_list = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, borderwidth=0, height=3)
         self.device_list.pack(fill=tk.X, pady=5)
 
+        ttk.Label(main_frame, text="Resolution", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        
+        self.res_options = ["640x480", "1280x720", "1920x1080"]
+        self.res_display_var = tk.StringVar(value=self.res_options[0]) # Default to first option
+        self.res_combo = ttk.Combobox(main_frame, textvariable=self.res_display_var, values=self.res_options, state="readonly")
+        self.res_combo.pack(fill=tk.X, pady=5)
+        self.res_combo.bind("<<ComboboxSelected>>", self.update_res)
+        
+        FFmpegStreamHandler.resolution = self.res_display_var.get()
+
         ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.ar_options = {
-            "4:3 (select for 4:3 on 16:9 displays)": "4/3",
-            "16:9 (select for 4:3 on 4:3 displays)": "16/9"
+            "Widescreen (16:9)": "16/9",
+            "Fullscreen (4:3)": "4/3"
         }
-        
-        self.ar_display_var = tk.StringVar(value="16/9 (select for 4:3 on 4:3 displays)")
+        self.ar_display_var = tk.StringVar(value="Widescreen (16:9)")
         self.ar_combo = ttk.Combobox(main_frame, textvariable=self.ar_display_var, values=list(self.ar_options.keys()), state="readonly")
         self.ar_combo.pack(fill=tk.X, pady=5)
         self.ar_combo.bind("<<ComboboxSelected>>", self.update_ar)
         
-        FFmpegStreamHandler.aspect_ratio = "4/3"
+        FFmpegStreamHandler.aspect_ratio = self.ar_options[self.ar_display_var.get()]
 
         play_frame = ttk.LabelFrame(main_frame, text="Playback Control",labelanchor='n')
         play_frame.pack(fill=tk.X, pady=5)
@@ -263,13 +297,12 @@ class ChromecastGui:
         self.seek_slider.bind("<ButtonRelease-1>", self.on_seek_release)
 
         ctrl_buttons = ttk.Frame(play_frame)
-        ctrl_buttons.pack(fill=tk.X)
+        ctrl_buttons.pack(fill=tk.X, pady=5)
         self.btn_cast = ttk.Button(ctrl_buttons, text="Cast", command=self.start_playback, state=tk.DISABLED)
         self.btn_cast.pack(side=tk.LEFT, padx=2)
         self.btn_stop = ttk.Button(ctrl_buttons, text="Stop", command=self.stop_cast, state=tk.DISABLED)
         self.btn_stop.pack(side=tk.LEFT, padx=2)
         ttk.Button(ctrl_buttons, text="Skip", command=self.skip_video).pack(side=tk.LEFT, padx=2)
-
 
         ttk.Label(ctrl_buttons, text=" Vol:", foreground=FG_COLOR).pack(side=tk.LEFT)
         self.vol_scale = ttk.Scale(ctrl_buttons, from_=0, to=1, orient=tk.HORIZONTAL, command=self.set_volume)
@@ -282,12 +315,16 @@ class ChromecastGui:
 
     def update_ar(self, event=None):
         display_val = self.ar_display_var.get()
-        internal_val = self.ar_options.get(display_val, "4/3")
+        internal_val = self.ar_options.get(display_val, "16/9")
         
         FFmpegStreamHandler.aspect_ratio = internal_val
         
         if self.is_playing:
             self.on_seek_release(None)
+
+    def update_res(self, event=None):
+        FFmpegStreamHandler.resolution = self.res_display_var.get()
+        print(f"Resolution updated to: {FFmpegStreamHandler.resolution}")
 
     def get_duration(self, filename):
         cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
@@ -348,8 +385,13 @@ class ChromecastGui:
         self.btn_stop.config(state=tk.DISABLED)
 
     def start_playback(self):
+        if self.is_playing:
+            self.stop_cast()
+            time.sleep(0.5)
+            
         selection = self.device_list.curselection()
         if not selection or not self.queue: return
+        
         self.cast_device = self.chromecasts[selection[0]]
         self.is_playing = True
         self.btn_cast.config(state=tk.DISABLED)
