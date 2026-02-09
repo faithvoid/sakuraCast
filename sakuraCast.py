@@ -194,14 +194,14 @@ class ChromecastGui:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(main_frame, text="sakuraCast v1.0\n", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
+        ttk.Label(main_frame, text="sakuraCast v1.0", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
 
         try:
             icon_image = tk.PhotoImage(file=ICON)
             self.root.iconphoto(False, icon_image)
             self.icon_img = tk.PhotoImage(file=ICON).subsample(5)
             self.icon_label = ttk.Label(main_frame, image=self.icon_img)
-            self.icon_label.pack(anchor=tk.CENTER, pady=(0, 10))
+            self.icon_label.pack(anchor=tk.CENTER)
     
         except Exception as e:
             print(f"Could not load sakura.png: {e}")
@@ -220,31 +220,31 @@ class ChromecastGui:
         ttk.Button(btn_frame, text="Add to Queue", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         ttk.Button(btn_frame, text="Clear Queue", command=self.clear_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
-        sub_frame = ttk.LabelFrame(main_frame, text="Subtitles (Optional)", padding=10, labelanchor='n')
+        sub_frame = ttk.LabelFrame(main_frame, text="Subtitles (Optional)", labelanchor='n')
         sub_frame.pack(fill=tk.X, pady=10)
         self.sub_var = tk.StringVar(value="No subtitles selected")
         ttk.Label(sub_frame, textvariable=self.sub_var, font=('Helvetica', 9, 'italic')).pack(side=tk.LEFT, expand=True)
         ttk.Button(sub_frame, text="Load SRT", command=self.load_subtitles).pack(side=tk.RIGHT)
 
-        ttk.Label(main_frame, text="Chromecast", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N, pady=(10,0))
+        ttk.Label(main_frame, text="Chromecast", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.device_list = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, borderwidth=0, height=3)
         self.device_list.pack(fill=tk.X, pady=5)
 
-        ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N, pady=(10,0))
+        ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.ar_options = {
             "4:3 (select for 4:3 on 16:9 displays)": "4/3",
             "16:9 (select for 4:3 on 4:3 displays)": "16/9"
         }
         
-        self.ar_display_var = tk.StringVar(value="16:9 (select for 4:3 on 4:3 displays)")
+        self.ar_display_var = tk.StringVar(value="16/9 (select for 4:3 on 4:3 displays)")
         self.ar_combo = ttk.Combobox(main_frame, textvariable=self.ar_display_var, values=list(self.ar_options.keys()), state="readonly")
         self.ar_combo.pack(fill=tk.X, pady=5)
         self.ar_combo.bind("<<ComboboxSelected>>", self.update_ar)
         
         FFmpegStreamHandler.aspect_ratio = "4/3"
 
-        play_frame = ttk.LabelFrame(main_frame, text="Playback Control", padding=10, labelanchor='n')
-        play_frame.pack(fill=tk.X, pady=10)
+        play_frame = ttk.LabelFrame(main_frame, text="Playback Control",labelanchor='n')
+        play_frame.pack(fill=tk.X, pady=5)
 
         self.title_var = tk.StringVar(value="No file playing")
         ttk.Label(play_frame, textvariable=self.title_var, font=('Helvetica', 10, 'italic'), foreground=ACCENT_COLOR).pack(anchor=tk.W)
