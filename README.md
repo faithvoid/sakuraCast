@@ -20,3 +20,4 @@ Chromecast casting program written in Python, with focus on custom aspect ratio 
 - Fix Google Home images
 - Add more customization options for ffmpeg backend
 - Modify to be OS-agnostic for Windows + macOS + BSD users
+- Video URL + yt-dlp support
