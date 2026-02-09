@@ -232,8 +232,8 @@ class ChromecastGui:
 
         ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N, pady=(10,0))
         self.ar_options = {
-            "4/3 (select for 4:3 on 16:9 displays)": "4/3",
-            "16/9 (select for 4:3 on 4:3 displays)": "16/9"
+            "4:3 (select for 4:3 on 16:9 displays)": "4/3",
+            "16:9 (select for 4:3 on 4:3 displays)": "16/9"
         }
         
         self.ar_display_var = tk.StringVar(value="16/9 (select for 4:3 on 4:3 displays)")
