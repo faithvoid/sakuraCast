@@ -1,5 +1,5 @@
 # sakuraCast
-Chromecast casting program written in Python, with focus on custom aspect ratio support (ie; for casting 4:3 content properly on 4:3 devices). 
+Chromecast casting program written in Python using PyChromecast, with focus on custom aspect ratio support (ie; for casting 4:3 content properly on 4:3 devices). 
 
 ![](screenshots/1.png)
 
