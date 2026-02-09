@@ -236,7 +236,7 @@ class ChromecastGui:
             "16:9 (select for 4:3 on 4:3 displays)": "16/9"
         }
         
-        self.ar_display_var = tk.StringVar(value="16/9 (select for 4:3 on 4:3 displays)")
+        self.ar_display_var = tk.StringVar(value="16:9 (select for 4:3 on 4:3 displays)")
         self.ar_combo = ttk.Combobox(main_frame, textvariable=self.ar_display_var, values=list(self.ar_options.keys()), state="readonly")
         self.ar_combo.pack(fill=tk.X, pady=5)
         self.ar_combo.bind("<<ComboboxSelected>>", self.update_ar)
