@@ -10,6 +10,7 @@ import subprocess
 import time
 from collections import deque
 import platform
+import yt_dlp
 
 VIDEO_MIME = "video/mp4"
 
@@ -120,7 +121,7 @@ class ChromecastGui:
     def __init__(self, root):
         self.root = root
         self.root.title("sakuraCast")
-        self.root.geometry("600x820")
+        self.root.geometry("600x920")
         self.root.configure(bg=BG_COLOR)
         
         self.server = None
@@ -214,6 +215,8 @@ class ChromecastGui:
         style.configure("TScale", background=BG_COLOR, troughcolor=SECONDARY_BG)
         style.configure("TCombobox", fieldbackground=SECONDARY_BG, background=SECONDARY_BG, foreground=FG_COLOR, arrowcolor=ACCENT_COLOR,bordercolor=SECONDARY_BG)  
         style.map("TCombobox", fieldbackground=[('readonly', SECONDARY_BG)],foreground=[('readonly', FG_COLOR)])
+        style.configure("TEntry", fieldbackground=SECONDARY_BG, foreground=FG_COLOR, insertcolor=ACCENT_COLOR, bordercolor=SECONDARY_BG)
+        style.configure("TLabelframe", background=BG_COLOR, foreground=ACCENT_COLOR)
 
     def setup_ui(self):
         main_frame = ttk.Frame(self.root, padding="10")
@@ -234,6 +237,13 @@ class ChromecastGui:
         ttk.Label(main_frame, text="Queue", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
         self.queue_listbox = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, selectbackground=ACCENT_COLOR, selectforeground=BG_COLOR, borderwidth=0, height=6)
         self.queue_listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        url_frame = ttk.LabelFrame(main_frame, text="Video URL (Direct link or YouTube)", labelanchor='n')
+        url_frame.pack(fill=tk.X, pady=5)
+        self.url_var = tk.StringVar()
+        self.url_entry = ttk.Entry(url_frame, textvariable=self.url_var)
+        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        ttk.Button(url_frame, text="Add URL", command=self.add_url_to_queue).pack(side=tk.RIGHT, padx=5)
 
         self.root.option_add("*TCombobox*Listbox.background", SECONDARY_BG)
         self.root.option_add("*TCombobox*Listbox.foreground", FG_COLOR)
@@ -258,7 +268,7 @@ class ChromecastGui:
         ttk.Label(main_frame, text="Resolution", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         
         self.res_options = ["640x480", "1280x720", "1920x1080"]
-        self.res_display_var = tk.StringVar(value=self.res_options[0]) # Default to first option
+        self.res_display_var = tk.StringVar(value=self.res_options[0])
         self.res_combo = ttk.Combobox(main_frame, textvariable=self.res_display_var, values=self.res_options, state="readonly")
         self.res_combo.pack(fill=tk.X, pady=5)
         self.res_combo.bind("<<ComboboxSelected>>", self.update_res)
@@ -339,6 +349,31 @@ class ChromecastGui:
             self.queue.append(f)
             self.queue_listbox.insert(tk.END, os.path.basename(f))
 
+    def add_url_to_queue(self):
+        url = self.url_var.get().strip()
+        if not url: return
+        
+        def process_url():
+            self.status_var.set("Processing URL...")
+            try:
+                ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best','nocheckcertificate': True,'quiet': True,'no_warnings': False,'extractor_args': {'youtube': {'player_client': ['android', 'web']}} }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    self.queue.append({
+                        'path': info['url'],
+                        'title': info.get('title', 'Web Video'),
+                        'duration': info.get('duration', 0)
+                    })
+                    self.root.after(0, lambda t=info.get('title', 'Web Video'): self.queue_listbox.insert(tk.END, f"[URL] {t}"))
+                    self.url_var.set("")
+                    self.status_var.set("URL added to queue.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not process URL: {e}")
+                self.status_var.set("URL processing failed.")
+
+        threading.Thread(target=process_url, daemon=True).start()
+
     def clear_queue(self):
         self.queue.clear()
         self.queue_listbox.delete(0, tk.END)
@@ -403,32 +438,62 @@ class ChromecastGui:
             self.cast_device.wait()
             local_ip = get_local_ip()
             while self.is_playing and self.queue:
-                video_path = self.queue.popleft()
+                item = self.queue.popleft()
                 self.queue_listbox.delete(0)
-                self.generate_thumbnail(video_path)
-                self.title_var.set(f"Now Playing: {os.path.basename(video_path)}")
-                self.current_video_duration = self.get_duration(video_path)
+
+                if isinstance(item, dict):
+                    video_path = item['path']
+                    display_name = item['title']
+                    duration = item.get('duration', 0)
+                else:
+                    video_path = item
+                    display_name = os.path.basename(item)
+                    duration = self.get_duration(item)
+
+                if not isinstance(item, dict):
+                    self.generate_thumbnail(video_path)
+                
+                self.title_var.set(f"Now Playing: {display_name}")
+                self.current_video_duration = duration
+                
                 self.root.after(0, lambda d=self.current_video_duration: self.seek_slider.config(to=int(d) if d > 0 else 100))
                 self.root.after(0, lambda d=self.current_video_duration: self.time_total_var.set(format_time(d)))
+
                 FFmpegStreamHandler.video_file = video_path
                 FFmpegStreamHandler.seek_time = 0
                 self.seek_var.set(0)
+
                 if not self.server:
                     self.server = socketserver.ThreadingTCPServer(("0.0.0.0", 8000), FFmpegStreamHandler)
                     threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
                 mc = self.cast_device.media_controller
-                mc.play_media(f"http://{local_ip}:8000/stream.mp4", content_type=VIDEO_MIME, title=os.path.basename(video_path), metadata={'metadataType': 1, 'title': os.path.basename(video_path), 'images': [{'url': f"http://{local_ip}:8000/thumb.jpg"}]})
+                mc.play_media(
+                    f"http://{local_ip}:8000/stream.mp4", 
+                    content_type=VIDEO_MIME, 
+                    title=display_name, 
+                    metadata={
+                        'metadataType': 1, 
+                        'title': display_name, 
+                        'images': [{'url': f"http://{local_ip}:8000/thumb.jpg"}]
+                    }
+                )
+
                 time.sleep(3) 
                 while self.is_playing:
-                    if mc.status.player_state == "IDLE" and time.time() > self.seek_lock_time: break
+                    if mc.status.player_state == "IDLE" and time.time() > self.seek_lock_time: 
+                        break
                     if not self.seeking and time.time() > self.manual_seek_cooldown:
                         cc_time = mc.status.current_time if mc.status.current_time else 0
                         current_pos = FFmpegStreamHandler.seek_time + cc_time
                         self.root.after(0, lambda p=current_pos: self.seek_var.set(p))
                         self.root.after(0, lambda p=current_pos: self.time_elapsed_var.set(format_time(p)))
                     time.sleep(1)
-            if not self.queue: self.stop_cast()
-        except Exception as e: print(f"Error in playback loop: {e}")
+
+            if not self.queue: 
+                self.stop_cast()
+        except Exception as e: 
+            print(f"Error in playback loop: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()
