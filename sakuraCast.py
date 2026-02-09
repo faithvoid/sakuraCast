@@ -16,6 +16,8 @@ BG_COLOR = "#1e1e1e"
 FG_COLOR = "#e0e0e0"
 ACCENT_COLOR = "#F8C8DC"
 SECONDARY_BG = "#2d2d2d"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ICON = os.path.join(SCRIPT_DIR, "sakura.png")
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -195,9 +197,9 @@ class ChromecastGui:
         ttk.Label(main_frame, text="sakuraCast v1.0\n", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
 
         try:
-            icon_image = tk.PhotoImage(file="sakura.png")
+            icon_image = tk.PhotoImage(file=ICON)
             self.root.iconphoto(False, icon_image)
-            self.icon_img = tk.PhotoImage(file="sakura.png").subsample(5)
+            self.icon_img = tk.PhotoImage(file=ICON).subsample(5)
             self.icon_label = ttk.Label(main_frame, image=self.icon_img)
             self.icon_label.pack(anchor=tk.CENTER, pady=(0, 10))
     
