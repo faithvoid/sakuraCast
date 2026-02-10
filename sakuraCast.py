@@ -186,7 +186,7 @@ class ChromecastGui:
     def __init__(self, root):
         self.root = root
         self.root.title(f"sakuraCast")
-        self.root.geometry("600x940")
+        self.root.geometry("600x720")
         self.root.configure(bg=BG_COLOR)
         
         self.server = None
@@ -372,39 +372,37 @@ class ChromecastGui:
         style.configure("TLabelframe", background=BG_COLOR, foreground=ACCENT_COLOR)
 
     def setup_ui(self):
-        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame = ttk.Frame(self.root, padding="5")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         try:
             icon_image = tk.PhotoImage(file=ICON)
             self.root.iconphoto(False, icon_image)
-            self.icon_img = tk.PhotoImage(file=ICON).subsample(5)
+            self.icon_img = tk.PhotoImage(file=ICON).subsample(10)
 
             self.icon_label = ttk.Label(main_frame, image=self.icon_img, cursor="hand2")
             self.icon_label.pack(anchor=tk.CENTER)
             self.icon_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/faithvoid/sakuraCast"))
 
-
             self.update_container = ttk.Frame(main_frame)
             self.update_container.pack(anchor=tk.CENTER)
-    
         except Exception as e:
             print(f"Could not load sakura.png: {e}")
 
         version_frame = ttk.Frame(main_frame)
         version_frame.pack()
-        ttk.Label(version_frame, text=f"sakuraCast", foreground="#F8C8DC").pack(side="left")
+        ttk.Label(version_frame, text=f"sakuraCast ", foreground="#F8C8DC").pack(side="left")
         ttk.Label(version_frame, text=f"v{VERSION}", foreground="#F8C8DC").pack(side="left")
 
-        ttk.Label(main_frame, text="Queue", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
-        self.queue_listbox = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, selectbackground=ACCENT_COLOR, selectforeground=BG_COLOR, borderwidth=0, height=6)
-        self.queue_listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+        ttk.Label(main_frame, text="Queue", font=('Helvetica', 9, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
+        self.queue_listbox = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, selectbackground=ACCENT_COLOR, selectforeground=BG_COLOR, borderwidth=0, height=4)
+        self.queue_listbox.pack(fill=tk.BOTH, expand=True, pady=2)
 
         url_frame = ttk.LabelFrame(main_frame, text="Video URL", labelanchor='n')
-        url_frame.pack(fill=tk.X, pady=5)
+        url_frame.pack(fill=tk.X, pady=2)
         self.url_var = tk.StringVar()
         self.url_entry = ttk.Entry(url_frame, textvariable=self.url_var)
-        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=2)
         ttk.Button(url_frame, text="Add URL", command=self.add_url_to_queue).pack(side=tk.RIGHT, padx=5)
 
         self.root.option_add("*TCombobox*Listbox.background", SECONDARY_BG)
@@ -414,142 +412,113 @@ class ChromecastGui:
 
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X)
-        ttk.Button(btn_frame, text="Add File(s) to Queue", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        ttk.Button(btn_frame, text="Add File(s)", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         ttk.Button(btn_frame, text="Clear Queue", command=self.clear_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         sub_frame = ttk.LabelFrame(main_frame, text="Subtitles", labelanchor='n')
-        sub_frame.pack(fill=tk.X, pady=10)
+        sub_frame.pack(fill=tk.X, pady=5)
         
         self.detected_subs = {"None": None}
         self.sub_selection_var = tk.StringVar(value="None")
         self.sub_combo = ttk.Combobox(sub_frame, textvariable=self.sub_selection_var, state="readonly")
-        self.sub_combo.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        self.sub_combo.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=2)
         self.sub_combo.bind("<<ComboboxSelected>>", self.on_subtitle_selected)
+        ttk.Button(sub_frame, text="Browse...", command=self.load_subtitles).pack(side=tk.RIGHT, padx=5)
 
-        ttk.Button(sub_frame, text="Browse...", command=self.load_subtitles).pack(side=tk.RIGHT)
-
-        ttk.Label(main_frame, text="Chromecast", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        ttk.Label(main_frame, text="Chromecast", font=('Helvetica', 9, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.device_list = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, borderwidth=0, height=3)
-        self.device_list.pack(fill=tk.X, pady=5)
+        self.device_list.pack(fill=tk.X, pady=2)
 
         settings_row = ttk.Frame(main_frame)
-        settings_row.pack(fill=tk.X, pady=5)
+        settings_row.pack(fill=tk.X, pady=2)
 
         res_frame = ttk.Frame(settings_row)
         res_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
-        
-        ttk.Label(res_frame, text="Resolution", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        ttk.Label(res_frame, text="Resolution", font=('Helvetica', 9, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.res_options = ["640x480", "1280x720", "1920x1080"]
         self.res_display_var = tk.StringVar(value=self.res_options[0])
         self.res_combo = ttk.Combobox(res_frame, textvariable=self.res_display_var, values=self.res_options, state="readonly")
-        self.res_combo.pack(fill=tk.X, pady=2)
+        self.res_combo.pack(fill=tk.X, pady=1)
         self.res_combo.bind("<<ComboboxSelected>>", self.update_res)
-        FFmpegStreamHandler.resolution = self.res_display_var.get()
 
         fps_frame = ttk.Frame(settings_row)
         fps_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
-        
-        ttk.Label(fps_frame, text="Framerate", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        ttk.Label(fps_frame, text="Framerate", font=('Helvetica', 9, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.fps_options = ["Original", "30", "60", "120"]
         self.fps_display_var = tk.StringVar(value=self.fps_options[0])
         self.fps_combo = ttk.Combobox(fps_frame, textvariable=self.fps_display_var, values=self.fps_options, state="readonly")
-        self.fps_combo.pack(fill=tk.X, pady=2)
+        self.fps_combo.pack(fill=tk.X, pady=1)
         self.fps_combo.bind("<<ComboboxSelected>>", self.update_fps)
-        
-        FFmpegStreamHandler.fps = self.fps_display_var.get()
 
-        ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
-        self.ar_options = {
-            "Widescreen (16:9)": "16/9",
-            "Fullscreen (4:3)": "4/3",
-            "Vertical (9:16)": "9/16"
-        }
+        ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 9, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        self.ar_options = {"Widescreen (16:9)": "16/9", "Fullscreen (4:3)": "4/3", "Vertical (9:16)": "9/16"}
         self.ar_display_var = tk.StringVar(value="Widescreen (16:9)")
         self.ar_combo = ttk.Combobox(main_frame, textvariable=self.ar_display_var, values=list(self.ar_options.keys()), state="readonly")
-        self.ar_combo.pack(fill=tk.X, pady=5)
+        self.ar_combo.pack(fill=tk.X, pady=2)
         self.ar_combo.bind("<<ComboboxSelected>>", self.update_ar)
-        
+
+        FFmpegStreamHandler.resolution = self.res_display_var.get()
+        FFmpegStreamHandler.fps = self.fps_display_var.get()
         FFmpegStreamHandler.aspect_ratio = self.ar_options[self.ar_display_var.get()]
 
-        overscan_frame = ttk.LabelFrame(main_frame, text="Overscan (Pixels to Crop)", labelanchor='n')
-        overscan_frame.pack(fill=tk.X, pady=5)
-
+        overscan_frame = ttk.LabelFrame(main_frame, text="Overscan", labelanchor='n')
+        overscan_frame.pack(fill=tk.X, pady=2)
         crop_row = ttk.Frame(overscan_frame)
-        crop_row.pack(pady=5, fill=tk.X)
-
+        crop_row.pack(pady=2, fill=tk.X)
         self.crop_vars = {}
-        sides = ["Top", "Bottom", "Left", "Right"]
-
-        for side in sides:
+        for side in ["Top", "Bottom", "Left", "Right"]:
             container = ttk.Frame(crop_row)
             container.pack(side=tk.LEFT, expand=True)
-            
-            ttk.Label(container, text=f"{side}:", font=('Helvetica', 8)).pack(side=tk.LEFT, padx=2)
-            
+            ttk.Label(container, text=f"{side}:", font=('Helvetica', 8)).pack(side=tk.LEFT)
             var = tk.StringVar(value="0")
             self.crop_vars[side.lower()] = var
-            
-            ent = ttk.Entry(container, textvariable=var, width=4)
-            ent.pack(side=tk.LEFT, padx=2)
-            
+            ent = ttk.Entry(container, textvariable=var, width=3)
+            ent.pack(side=tk.LEFT, padx=1)
             ent.bind("<FocusOut>", self.update_overscan)
             ent.bind("<Return>", self.update_overscan)
 
-        play_frame = ttk.LabelFrame(main_frame, text="Playback Control",labelanchor='n')
-        play_frame.pack(fill=tk.X, pady=5)
+        play_frame = ttk.LabelFrame(main_frame, text="Playback", labelanchor='n')
+        play_frame.pack(fill=tk.X, pady=2)
 
         self.title_var = tk.StringVar(value="No file playing")
-        ttk.Label(play_frame, textvariable=self.title_var, font=('Helvetica', 10, 'italic'), foreground=ACCENT_COLOR).pack(anchor=tk.W)
+        ttk.Label(play_frame, textvariable=self.title_var, font=('Helvetica', 9, 'italic'), foreground=ACCENT_COLOR).pack()
 
         time_frame = ttk.Frame(play_frame)
-        time_frame.pack(fill=tk.X)
+        time_frame.pack(fill=tk.X, padx=5)
         self.time_elapsed_var = tk.StringVar(value="00:00:00")
         self.time_total_var = tk.StringVar(value="00:00:00")
-        ttk.Label(time_frame, textvariable=self.time_elapsed_var).pack(side=tk.LEFT)
-        ttk.Label(time_frame, textvariable=self.time_total_var).pack(side=tk.RIGHT)
+        ttk.Label(time_frame, textvariable=self.time_elapsed_var, font=('Helvetica', 8)).pack(side=tk.LEFT)
+        ttk.Label(time_frame, textvariable=self.time_total_var, font=('Helvetica', 8)).pack(side=tk.RIGHT)
 
         self.seek_var = tk.DoubleVar()
         self.seek_slider = ttk.Scale(play_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.seek_var)
-        self.seek_slider.pack(fill=tk.X, pady=5)
+        self.seek_slider.pack(fill=tk.X, pady=2, padx=5)
         self.seek_slider.bind("<Button-1>", self.on_seek_start)
         self.seek_slider.bind("<ButtonRelease-1>", self.on_seek_release)
 
         ctrl_buttons = ttk.Frame(play_frame)
-        ctrl_buttons.pack(fill=tk.X, pady=5)
-        self.btn_cast = ttk.Button(ctrl_buttons, text="Cast", command=self.start_playback, state=tk.DISABLED)
-        self.btn_cast.pack(side=tk.LEFT, padx=2)
-        self.btn_pause = ttk.Button(ctrl_buttons, text="Pause", command=self.pause_cast, state=tk.DISABLED)
-        self.btn_pause.pack(side=tk.LEFT, padx=2)
-        self.btn_stop = ttk.Button(ctrl_buttons, text="Stop", command=self.stop_cast, state=tk.DISABLED)
-        self.btn_stop.pack(side=tk.LEFT, padx=2)
-        ttk.Button(ctrl_buttons, text="Skip", command=self.skip_video).pack(side=tk.LEFT, padx=2)
+        ctrl_buttons.pack(fill=tk.X, pady=2)
+        for text, cmd in [("Cast", self.start_playback), ("Pause", self.pause_cast), ("Stop", self.stop_cast), ("Skip", self.skip_video)]:
+            btn = ttk.Button(ctrl_buttons, text=text, command=cmd, state=tk.DISABLED if text != "Skip" else tk.NORMAL, width=5)
+            btn.pack(side=tk.LEFT, padx=1)
+            if text == "Cast": self.btn_cast = btn
+            elif text == "Pause": self.btn_pause = btn
+            elif text == "Stop": self.btn_stop = btn
 
-        ttk.Label(ctrl_buttons, text=" Vol:", foreground=FG_COLOR).pack(side=tk.LEFT)
         self.vol_scale = ttk.Scale(ctrl_buttons, from_=0, to=1, orient=tk.HORIZONTAL, command=self.set_volume)
         self.vol_scale.set(1)
-        self.vol_scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.vol_scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-        self.status_var = tk.StringVar(value="Searching for device(s)...")
-        ttk.Label(main_frame, textvariable=self.status_var, foreground="#F8C8DC").pack(pady=5)
+        self.status_var = tk.StringVar(value="Searching...")
+        ttk.Label(main_frame, textvariable=self.status_var, foreground="#F8C8DC", font=('Helvetica', 8)).pack()
+        
         line_frame = ttk.Frame(main_frame)
-        line_frame.pack(pady=5)
-
+        line_frame.pack()
         ttk.Label(line_frame, text="made with love by faithvoid @", foreground="#F8C8DC").pack(side="left")
-
-        url_label = ttk.Label(line_frame, text="faithvoid.github.io", foreground="#F8C8DC", cursor="hand2")
-        url_label.pack(side="left")
-
-        kofi_label = ttk.Label(line_frame, text="[ko-fi]", foreground="#F8C8DC", cursor="hand2")
-        kofi_label.pack(side="left")
-
-    # Make the text itself clickable
-        kofi_label.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/videogirl95"))
-
-        patreon_label = ttk.Label(line_frame, text="[patreon]", foreground="#F8C8DC", cursor="hand2")
-        patreon_label.pack(side="left")
-
-    # Make the text itself clickable
-        patreon_label.bind("<Button-1>", lambda e: webbrowser.open("https://patreon.com/videogirl95"))
+        ttk.Label(line_frame, text="faithvoid.github.io ", foreground="#F8C8DC", cursor="hand2").pack(side="left")
+        kofi = ttk.Label(line_frame, text="[ko-fi]", foreground="#F8C8DC", cursor="hand2")
+        kofi.pack(side="left", padx=2)
+        kofi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/videogirl95"))
 
     def update_ar(self, event=None):
         display_val = self.ar_display_var.get()
