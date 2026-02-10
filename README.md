@@ -14,7 +14,8 @@ Multiplatform casting program written in Python using PyChromecast, with a focus
 
 ## How to use:
 - Download the latest release of sakuraCast
-- Install ffmpeg if not already installed
+- Install ffmpeg if not already installed (macOS: ``` brew install ffmpeg ``` or ``` sudo port install ffmpeg ``` ) (Arch: ``` sudo pacman -S ffmpeg ```) (Debian/Ubuntu: ``` sudo apt install ffmpeg ```)
+- Install python-tk, python-pychromecast & yt-dlp (``` pip install pychromecast ``` + ``` pip install tk ``` + ``` pip install yt-dlp ```)
 - Open it and select your video file(s) or enter your video URL (URLs that end with file extensions or YouTube only!)
 - Select your subtitles, if required
 - Select the Chromecast you'd like to cast the video to, and the aspect ratio you'd like to cast in (select 16/9 if you're using a 16/9 display or casting 4:3 content to a 4:3 display, use 4/3 if you're casting 4:3 content to a 16:9 display)
