@@ -27,11 +27,11 @@ Multiplatform casting program written in Python using PyChromecast, with a focus
 - Sometimes stopping a stream requires a restart of the script.
 
 ## TODO:
-- [] Implement local music support + online music support via yt-dlp
-- [] Fix Google Home images
-- [] Add more customization options for ffmpeg backend
-- [] Add more subtitle options
-- [] Improve video URL + yt-dlp support and auth challenges (working: YouTube, Tumblr, Reddit)
-- [] Optimizations and bugfixes
-- [] Fix cast metadata overall
-- [] Implement a webserver for sending files and URLs and commands to(?)
+- [ ] Implement local music support + online music support via yt-dlp
+- [ ] Fix Google Home images
+- [ ] Add more customization options for ffmpeg backend
+- [ ] Add more subtitle options
+- [ ] Improve video URL + yt-dlp support and auth challenges (working: YouTube, Tumblr, Reddit)
+- [ ] Optimizations and bugfixes
+- [ ] Fix cast metadata overall
+- [ ] Implement a webserver for sending files and URLs and commands to(?)
