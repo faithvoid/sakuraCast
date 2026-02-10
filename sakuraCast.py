@@ -222,13 +222,8 @@ class ChromecastGui:
             print(f"Error checking for update: {e}")
 
     def display_update_available(self):
-        update_frame = ttk.Frame(self.root)
-        update_frame.pack(anchor=tk.CENTER)
-
-        update_label = ttk.Label(update_frame, text="Update Available!", foreground=ACCENT_COLOR, font=('Helvetica', 10, 'bold'))
-        update_label.pack()
-
-        update_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/faithvoid/sakuraCast"))
+        update_label = ttk.Label(self.update_container, text="Update Available!", foreground=ACCENT_COLOR, font=('Helvetica', 10, 'bold'),cursor="hand2")
+        update_label.pack(pady=(0, 5))
 
 
     def generate_thumbnail(self, video_path):
@@ -384,8 +379,14 @@ class ChromecastGui:
             icon_image = tk.PhotoImage(file=ICON)
             self.root.iconphoto(False, icon_image)
             self.icon_img = tk.PhotoImage(file=ICON).subsample(5)
-            self.icon_label = ttk.Label(main_frame, image=self.icon_img)
+
+            self.icon_label = ttk.Label(main_frame, image=self.icon_img, cursor="hand2")
             self.icon_label.pack(anchor=tk.CENTER)
+            self.icon_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/faithvoid/sakuraCast"))
+
+
+            self.update_container = ttk.Frame(main_frame)
+            self.update_container.pack(anchor=tk.CENTER)
     
         except Exception as e:
             print(f"Could not load sakura.png: {e}")
