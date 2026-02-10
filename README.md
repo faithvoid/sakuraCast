@@ -3,6 +3,13 @@ Chromecast casting program written in Python using PyChromecast, with a focus on
 
 ![](screenshots/1.png)
 
+## Features:
+- Support for custom aspect ratios and video resolutions for local and online videos!
+- True 4:3 video support for Chromecast devices connected to 4:3 displays, no more letterboxing! (Select 640x480 + Widescreen for the best results!)
+- Queue local and online videos so you can sit back, relax, and marathon your favourite movies and shows hassle-free!
+- Casting support from any yt-dlp supported site! (WIP)
+- Integrate subtitles directly into any video being cast, including a mode optimized for 4:3 CRTs when set to 640x480!
+
 ## How to use:
 - Download the latest release of sakuraCast
 - Install ffmpeg if not already installed
@@ -19,4 +26,8 @@ Chromecast casting program written in Python using PyChromecast, with a focus on
 ## TODO:
 - Fix Google Home images
 - Add more customization options for ffmpeg backend
+- Add more subtitle options
 - Improve video URL + yt-dlp support
+- Optimizations and bugfixes
+- Implement local music support + online music support via yt-dlp
+- Fix cast metadata overall
