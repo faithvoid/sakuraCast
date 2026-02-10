@@ -223,7 +223,7 @@ class ChromecastGui:
 
     def display_update_available(self):
         update_label = ttk.Label(self.update_container, text="Update Available!", foreground=ACCENT_COLOR, font=('Helvetica', 10, 'bold'),cursor="hand2")
-        update_label.pack(pady=(0, 5))
+        update_label.pack(pady=(0, 0))
 
 
     def generate_thumbnail(self, video_path):
