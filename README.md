@@ -1,6 +1,6 @@
 # sakuraCast
 ### Cast the Planet
-Chromecast casting program written in Python using PyChromecast, with a focus on casting local, YouTube, and online (via files) content in custom aspect ratios (ie; casting 4:3 content properly on 4:3 devices).
+Multiplatform casting program written in Python using PyChromecast, with a focus on casting local, YouTube, and online (via files) content in custom aspect ratios (ie; casting 4:3 content properly on 4:3 devices).
 
 ![](screenshots/1.png)
 
@@ -10,6 +10,7 @@ Chromecast casting program written in Python using PyChromecast, with a focus on
 - Queue local and online videos so you can sit back, relax, and marathon your favourite movies and shows hassle-free!
 - Casting support from any yt-dlp supported site! (WIP)
 - Integrate subtitles directly into any video being cast, including a mode optimized for 4:3 CRTs when set to 640x480!
+- Multiplatform support! (Tested in Linux & macOS, should work on Windows!)
 
 ## How to use:
 - Download the latest release of sakuraCast
