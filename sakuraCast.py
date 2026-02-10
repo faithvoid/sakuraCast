@@ -16,6 +16,7 @@ import requests
 import glob
 
 VIDEO_MIME = "video/mp4"
+AUDIO_MIME = "audio/mpeg"
 
 BG_COLOR = "#1e1e1e"
 FG_COLOR = "#e0e0e0"
@@ -50,6 +51,12 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
     hw_args = []
     aspect_ratio = "16/9"
     resolution = "640x480"
+    fps = "Original"
+
+    crop_top = 0
+    crop_bottom = 0
+    crop_left = 0
+    crop_right = 0
 
     def do_GET(self):
         clean_path = self.path.split('?')[0]
@@ -91,11 +98,23 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
         target_dar = self.aspect_ratio
         res_w, res_h = res.split('x')
 
+        fps_val = FFmpegStreamHandler.fps
+        fps_filter_str = f",fps={fps_val}" if fps_val != "Original" else ""
+        
+        fps_output_args = ["-r", fps_val] if fps_val != "Original" else []
+
+        ct = self.crop_top
+        cb = self.crop_bottom
+        cl = self.crop_left
+        cr = self.crop_right
+        crop_filter = f"crop=iw-{cl}-{cr}:ih-{ct}-{cb}:{cl}:{ct},"
+
         if "vaapi" in self.encoder:
-            v_filter = f"format=nv12,{sub_filter}hwupload,scale_vaapi=w={res_w}:h={res_h},setsar=1,setdar={target_dar}"
+            v_filter = f"format=nv12,{crop_filter}{sub_filter}hwupload,scale_vaapi=w={res_w}:h={res_h},setsar=1,setdar={target_dar}{fps_filter_str}"
         elif "videotoolbox" in self.encoder:
-            v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar}"
-            v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar},format=yuv420p"
+            v_filter = f"{crop_filter}{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar},format=yuv420p{fps_filter_str}"
+        else:
+            v_filter = f"{crop_filter}{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar}{fps_filter_str}"
 
         extra_input_args = []
         if self.headers_dict:
@@ -109,12 +128,17 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
             ]
 
         ffmpeg_cmd = [
-            "ffmpeg", "-ss", str(self.seek_time)
+            "ffmpeg", 
+            "-protocol_whitelist", "file,http,https,tcp,tls,crypto,data",
+            "-ss", str(self.seek_time)
         ] + self.hw_args + extra_input_args + [
             "-i", self.video_file,
             "-vf", v_filter,
+            "-af", "aresample=async=1",
             "-c:v", self.encoder,
+        ] + fps_output_args + [
             "-preset", "ultrafast" if "libx264" in self.encoder else "fast",
+            "-tune", "zerolatency",
             "-c:a", "aac", "-b:a", "128k",
             "-f", "mp4", 
             "-movflags", "frag_keyframe+empty_moov+default_base_moof",
@@ -127,18 +151,26 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
         proc = subprocess.Popen(
-            ffmpeg_cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
-            bufsize=10**6
+             ffmpeg_cmd, 
+             stdout=subprocess.PIPE, 
+             stderr=subprocess.DEVNULL, 
+             bufsize=10**6
         )
 
-        def log_reader(pipe):
-            with pipe:
-                for line in iter(pipe.readline, b''):
-                    print(f"[FFmpeg Log]: {line.decode('utf-8', errors='replace').strip()}")
 
-        threading.Thread(target=log_reader, args=(proc.stderr,), daemon=True).start()
+#        proc = subprocess.Popen(
+#            ffmpeg_cmd, 
+#            stdout=subprocess.PIPE, 
+#            stderr=subprocess.PIPE,
+#            bufsize=10**6
+#        )
+
+#        def log_reader(pipe):
+#            with pipe:
+#                for line in iter(pipe.readline, b''):
+#                    print(f"[FFmpeg Log]: {line.decode('utf-8', errors='replace').strip()}")
+
+#        threading.Thread(target=log_reader, args=(proc.stderr,), daemon=True).start()
         
         try:
             while True:
@@ -241,6 +273,18 @@ class ChromecastGui:
         self.status_var.set(f"Encoder: {FFmpegStreamHandler.encoder}")
         print(f"OS: {system} | Selected: {FFmpegStreamHandler.encoder}")
 
+    def update_overscan(self, event=None):
+        try:
+            FFmpegStreamHandler.crop_top = int(self.crop_vars['top'].get())
+            FFmpegStreamHandler.crop_bottom = int(self.crop_vars['bottom'].get())
+            FFmpegStreamHandler.crop_left = int(self.crop_vars['left'].get())
+            FFmpegStreamHandler.crop_right = int(self.crop_vars['right'].get())
+            
+            if self.is_playing:
+                self.on_seek_release(None)
+        except ValueError:
+            pass
+
     def test_ffmpeg_encoder(self, encoder_name, extra_args=[]):
         test_cmd = [
             "ffmpeg", "-y", 
@@ -336,8 +380,6 @@ class ChromecastGui:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(main_frame, text=f"sakuraCast [v{VERSION}]", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
-
         try:
             icon_image = tk.PhotoImage(file=ICON)
             self.root.iconphoto(False, icon_image)
@@ -348,11 +390,16 @@ class ChromecastGui:
         except Exception as e:
             print(f"Could not load sakura.png: {e}")
 
+        version_frame = ttk.Frame(main_frame)
+        version_frame.pack()
+        ttk.Label(version_frame, text=f"sakuraCast", foreground="#F8C8DC").pack(side="left")
+        ttk.Label(version_frame, text=f"v{VERSION}", foreground="#F8C8DC").pack(side="left")
+
         ttk.Label(main_frame, text="Queue", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
         self.queue_listbox = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, selectbackground=ACCENT_COLOR, selectforeground=BG_COLOR, borderwidth=0, height=6)
         self.queue_listbox.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        url_frame = ttk.LabelFrame(main_frame, text="Video URL (Direct link or YouTube)", labelanchor='n')
+        url_frame = ttk.LabelFrame(main_frame, text="Video URL", labelanchor='n')
         url_frame.pack(fill=tk.X, pady=5)
         self.url_var = tk.StringVar()
         self.url_entry = ttk.Entry(url_frame, textvariable=self.url_var)
@@ -366,7 +413,7 @@ class ChromecastGui:
 
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X)
-        ttk.Button(btn_frame, text="Add to Queue", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        ttk.Button(btn_frame, text="Add File(s) to Queue", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         ttk.Button(btn_frame, text="Clear Queue", command=self.clear_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         sub_frame = ttk.LabelFrame(main_frame, text="Subtitles", labelanchor='n')
@@ -384,15 +431,31 @@ class ChromecastGui:
         self.device_list = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, borderwidth=0, height=3)
         self.device_list.pack(fill=tk.X, pady=5)
 
-        ttk.Label(main_frame, text="Resolution", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        settings_row = ttk.Frame(main_frame)
+        settings_row.pack(fill=tk.X, pady=5)
+
+        res_frame = ttk.Frame(settings_row)
+        res_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 5))
         
+        ttk.Label(res_frame, text="Resolution", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.res_options = ["640x480", "1280x720", "1920x1080"]
         self.res_display_var = tk.StringVar(value=self.res_options[0])
-        self.res_combo = ttk.Combobox(main_frame, textvariable=self.res_display_var, values=self.res_options, state="readonly")
-        self.res_combo.pack(fill=tk.X, pady=5)
+        self.res_combo = ttk.Combobox(res_frame, textvariable=self.res_display_var, values=self.res_options, state="readonly")
+        self.res_combo.pack(fill=tk.X, pady=2)
         self.res_combo.bind("<<ComboboxSelected>>", self.update_res)
-        
         FFmpegStreamHandler.resolution = self.res_display_var.get()
+
+        fps_frame = ttk.Frame(settings_row)
+        fps_frame.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5, 0))
+        
+        ttk.Label(fps_frame, text="Framerate", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
+        self.fps_options = ["Original", "30", "60", "120"]
+        self.fps_display_var = tk.StringVar(value=self.fps_options[0])
+        self.fps_combo = ttk.Combobox(fps_frame, textvariable=self.fps_display_var, values=self.fps_options, state="readonly")
+        self.fps_combo.pack(fill=tk.X, pady=2)
+        self.fps_combo.bind("<<ComboboxSelected>>", self.update_fps)
+        
+        FFmpegStreamHandler.fps = self.fps_display_var.get()
 
         ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.ar_options = {
@@ -406,6 +469,30 @@ class ChromecastGui:
         self.ar_combo.bind("<<ComboboxSelected>>", self.update_ar)
         
         FFmpegStreamHandler.aspect_ratio = self.ar_options[self.ar_display_var.get()]
+
+        overscan_frame = ttk.LabelFrame(main_frame, text="Overscan (Pixels to Crop)", labelanchor='n')
+        overscan_frame.pack(fill=tk.X, pady=5)
+
+        crop_row = ttk.Frame(overscan_frame)
+        crop_row.pack(pady=5, fill=tk.X)
+
+        self.crop_vars = {}
+        sides = ["Top", "Bottom", "Left", "Right"]
+
+        for side in sides:
+            container = ttk.Frame(crop_row)
+            container.pack(side=tk.LEFT, expand=True)
+            
+            ttk.Label(container, text=f"{side}:", font=('Helvetica', 8)).pack(side=tk.LEFT, padx=2)
+            
+            var = tk.StringVar(value="0")
+            self.crop_vars[side.lower()] = var
+            
+            ent = ttk.Entry(container, textvariable=var, width=4)
+            ent.pack(side=tk.LEFT, padx=2)
+            
+            ent.bind("<FocusOut>", self.update_overscan)
+            ent.bind("<Return>", self.update_overscan)
 
         play_frame = ttk.LabelFrame(main_frame, text="Playback Control",labelanchor='n')
         play_frame.pack(fill=tk.X, pady=5)
@@ -430,6 +517,8 @@ class ChromecastGui:
         ctrl_buttons.pack(fill=tk.X, pady=5)
         self.btn_cast = ttk.Button(ctrl_buttons, text="Cast", command=self.start_playback, state=tk.DISABLED)
         self.btn_cast.pack(side=tk.LEFT, padx=2)
+        self.btn_pause = ttk.Button(ctrl_buttons, text="Pause", command=self.pause_cast, state=tk.DISABLED)
+        self.btn_pause.pack(side=tk.LEFT, padx=2)
         self.btn_stop = ttk.Button(ctrl_buttons, text="Stop", command=self.stop_cast, state=tk.DISABLED)
         self.btn_stop.pack(side=tk.LEFT, padx=2)
         ttk.Button(ctrl_buttons, text="Skip", command=self.skip_video).pack(side=tk.LEFT, padx=2)
@@ -449,14 +538,6 @@ class ChromecastGui:
         url_label = ttk.Label(line_frame, text="faithvoid.github.io", foreground="#F8C8DC", cursor="hand2")
         url_label.pack(side="left")
 
-        kofi_frame = ttk.Frame(main_frame)
-        kofi_frame.pack()
-
-        url_label_ko_fi = ttk.Label(kofi_frame, text="ko-fi", foreground="#F8C8DC", cursor="hand2")
-        url_label_ko_fi.pack()
-
-        url_label_ko_fi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/videogirl95"))
-
     def update_ar(self, event=None):
         display_val = self.ar_display_var.get()
         internal_val = self.ar_options.get(display_val, "16/9")
@@ -470,6 +551,13 @@ class ChromecastGui:
         FFmpegStreamHandler.resolution = self.res_display_var.get()
         print(f"Resolution updated to: {FFmpegStreamHandler.resolution}")
 
+    def update_fps(self, event=None):
+        FFmpegStreamHandler.fps = self.fps_display_var.get()
+        print(f"FPS updated to: {FFmpegStreamHandler.fps}")
+
+        if self.is_playing:
+            self.on_seek_release(None)
+
     def get_duration(self, filename):
         cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filename]
         try:
@@ -478,7 +566,13 @@ class ChromecastGui:
         except: return 0
 
     def add_to_queue(self):
-        filenames = filedialog.askopenfilenames(filetypes=[("Video files", "*.mp4 *.mkv *.avi *.mov")])
+        file_types = [
+            ("Media files", "*.mp4 *.mkv *.avi *.mov *.m3u *.m3u8 *.mp3 *.flac *.wav *.m4a"),
+            ("Video files", "*.mp4 *.mkv *.avi *.mov"),
+            ("Audio files", "*.mp3 *.flac *.wav *.m4a"),
+            ("All files", "*.*")
+        ]
+        filenames = filedialog.askopenfilenames(filetypes=file_types)
         for f in filenames:
             self.queue.append(f)
             self.queue_listbox.insert(tk.END, os.path.basename(f))
@@ -520,7 +614,7 @@ class ChromecastGui:
 
                     self.root.after(0, lambda t=info.get('title', 'Web Video'): self.queue_listbox.insert(tk.END, f"[URL] {t}"))
                     self.url_var.set("")
-                    self.status_var.set("URL added to queue.")
+                    self.status_var.set(f"[URL] added to queue.")
             except Exception as e:
                 messagebox.showerror("Error", f"Could not process URL: {e}")
                 self.status_var.set("URL processing failed.")
@@ -569,11 +663,26 @@ class ChromecastGui:
         if self.cast_device: self.cast_device.media_controller.stop()
         if self.server: self.server.shutdown()
 
-        self.root.title(f"sakuraCast")
-    
+        self.root.title("sakuraCast")
         self.status_var.set("Stopped.")
+        
         self.btn_cast.config(state=tk.NORMAL)
+        self.btn_pause.config(state=tk.DISABLED, text="Pause")
         self.btn_stop.config(state=tk.DISABLED)
+
+    def pause_cast(self):
+        if not self.cast_device or not self.is_playing:
+            return
+        
+        mc = self.cast_device.media_controller
+        if mc.status.player_state == "PLAYING":
+            mc.pause()
+            self.status_var.set("Paused")
+            self.btn_pause.config(text="Resume")
+        else:
+            mc.play()
+            self.status_var.set("Resuming...")
+            self.btn_pause.config(text="Pause")
 
     def start_playback(self):
         if self.is_playing:
@@ -587,6 +696,7 @@ class ChromecastGui:
         self.is_playing = True
         self.btn_cast.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
+        self.btn_pause.config(state=tk.NORMAL)
         threading.Thread(target=self.playback_loop, daemon=True).start()
 
         display_name = self.queue[0]['title'] if isinstance(self.queue[0], dict) else os.path.basename(self.queue[0])
