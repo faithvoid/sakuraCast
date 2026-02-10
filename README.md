@@ -17,7 +17,7 @@ Multiplatform casting program written in Python using PyChromecast, with a focus
 - Install ffmpeg if not already installed (macOS: ``` brew install ffmpeg ``` or ``` sudo port install ffmpeg ``` ) (Arch: ``` sudo pacman -S ffmpeg ```) (Debian/Ubuntu: ``` sudo apt install ffmpeg ```)
 - Install python-tk, python-pychromecast & yt-dlp (``` pip install pychromecast ``` + ``` pip install tk ``` + ``` pip install yt-dlp ```)
 - Open it and select your video file(s) or enter your video URL (URLs that end with file extensions or YouTube only!)
-- Select your subtitles, if required
+- Select your subtitles, if required. If subtitles are found in the video container or share the same name as the video file, they'll show up automatically!
 - Select the Chromecast you'd like to cast the video to, and the aspect ratio you'd like to cast in (select 16/9 if you're using a 16/9 display or casting 4:3 content to a 4:3 display, use 4/3 if you're casting 4:3 content to a 16:9 display)
 - Select "Cast" and you're all set! This script will detect if you have hardware acceleration and use that to transcode the video, otherwise, will fall back to software transcoding.
 
