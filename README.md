@@ -1,6 +1,5 @@
 # sakuraCast
 ### Cast the Planet
-![](sakura.png)
 Multiplatform casting program written in Python using PyChromecast, with a focus on casting local, YouTube, and online (via files) content in custom aspect ratios (ie; casting 4:3 content properly on 4:3 devices).
 
 ![](screenshots/1.png)
