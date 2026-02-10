@@ -32,3 +32,4 @@ Chromecast casting program written in Python using PyChromecast, with a focus on
 - Optimizations and bugfixes
 - Implement local music support + online music support via yt-dlp
 - Fix cast metadata overall
+- Make modifications to run on Android/iOS via their respective Python interpreters(?)
