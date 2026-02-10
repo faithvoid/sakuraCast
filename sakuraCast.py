@@ -11,6 +11,9 @@ import time
 from collections import deque
 import platform
 import yt_dlp
+import webbrowser
+import requests
+import glob
 
 VIDEO_MIME = "video/mp4"
 
@@ -20,6 +23,7 @@ ACCENT_COLOR = "#F8C8DC"
 SECONDARY_BG = "#2d2d2d"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ICON = os.path.join(SCRIPT_DIR, "sakura.png")
+VERSION = "0.99"
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -41,6 +45,7 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
     video_file = None
     subtitle_file = None
     seek_time = 0 
+    headers_dict = {}
     encoder = "libx264"
     hw_args = []
     aspect_ratio = "16/9"
@@ -68,14 +73,19 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
             return
         
         sub_filter = ""
-        if self.subtitle_file and os.path.exists(self.subtitle_file):
-            escaped_path = self.subtitle_file.replace("\\", "/").replace(":", "\\:")
+        sub_file = self.subtitle_file
+        
+        if sub_file:
             offset = self.seek_time
-            crt_style = (
-                "force_style='Alignment=2,Outline=1,Shadow=1,BorderStyle=4,"
-                "BackColour=&H80000000,Spacing=0.2,MarginV=15,FontSize=20,Bold=1'"
-            )
-            sub_filter = f"setpts=PTS+{offset}/TB,subtitles='{escaped_path}':{crt_style},setpts=PTS-{offset}/TB,"
+            crt_style = ("force_style='Alignment=2,Outline=1,Shadow=1,BorderStyle=4,""BackColour=&H80000000,Spacing=0.2,MarginV=15,FontSize=20,Bold=1'")
+            
+            if sub_file.startswith("internal:"):
+                stream_idx = sub_file.split(":")[1]
+                escaped_vid = self.video_file.replace("\\", "/").replace(":", "\\:")
+                sub_filter = f"setpts=PTS+{offset}/TB,subtitles='{escaped_vid}':si={stream_idx}:{crt_style},setpts=PTS-{offset}/TB,"
+            elif os.path.exists(sub_file):
+                escaped_path = sub_file.replace("\\", "/").replace(":", "\\:")
+                sub_filter = f"setpts=PTS+{offset}/TB,subtitles='{escaped_path}':{crt_style},setpts=PTS-{offset}/TB,"
 
         res = FFmpegStreamHandler.resolution
         target_dar = self.aspect_ratio
@@ -87,9 +97,20 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
             v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar}"
             v_filter = f"{sub_filter}scale={res_w}:{res_h},setsar=1,setdar={target_dar},format=yuv420p"
 
+        extra_input_args = []
+        if self.headers_dict:
+            header_str = "".join([f"{k}: {v}\r\n" for k, v in self.headers_dict.items()])
+            
+            extra_input_args = [
+                "-headers", header_str,
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5"
+            ]
+
         ffmpeg_cmd = [
             "ffmpeg", "-ss", str(self.seek_time)
-        ] + self.hw_args + [
+        ] + self.hw_args + extra_input_args + [
             "-i", self.video_file,
             "-vf", v_filter,
             "-c:v", self.encoder,
@@ -105,7 +126,19 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
-        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**6)
+        proc = subprocess.Popen(
+            ffmpeg_cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            bufsize=10**6
+        )
+
+        def log_reader(pipe):
+            with pipe:
+                for line in iter(pipe.readline, b''):
+                    print(f"[FFmpeg Log]: {line.decode('utf-8', errors='replace').strip()}")
+
+        threading.Thread(target=log_reader, args=(proc.stderr,), daemon=True).start()
         
         try:
             while True:
@@ -120,8 +153,8 @@ class FFmpegStreamHandler(http.server.BaseHTTPRequestHandler):
 class ChromecastGui:
     def __init__(self, root):
         self.root = root
-        self.root.title("sakuraCast")
-        self.root.geometry("600x920")
+        self.root.title(f"sakuraCast")
+        self.root.geometry("600x940")
         self.root.configure(bg=BG_COLOR)
         
         self.server = None
@@ -137,9 +170,34 @@ class ChromecastGui:
         
         self.apply_styles()
         self.setup_ui()
+        self.check_for_update()
         self.discover_chromecasts()
         self.detect_hardware_acceleration()
+        self.detected_subs = {"None": None}
         self.selected_subtitles = None
+
+    def check_for_update(self):
+        version_url = "https://raw.githubusercontent.com/faithvoid/sakuraCast/refs/heads/main/version.txt"
+        try:
+            response = requests.get(version_url)
+            if response.status_code == 200:
+                remote_version = response.text.strip()
+                if remote_version != VERSION:
+                    self.display_update_available()
+                    print(f"Remote version: {remote_version}")
+
+        except Exception as e:
+            print(f"Error checking for update: {e}")
+
+    def display_update_available(self):
+        update_frame = ttk.Frame(self.root)
+        update_frame.pack(anchor=tk.CENTER)
+
+        update_label = ttk.Label(update_frame, text="Update Available!", foreground=ACCENT_COLOR, font=('Helvetica', 10, 'bold'))
+        update_label.pack()
+
+        update_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/faithvoid/sakuraCast"))
+
 
     def generate_thumbnail(self, video_path):
         thumb_path = os.path.join(SCRIPT_DIR, "thumb.jpg")
@@ -196,16 +254,72 @@ class ChromecastGui:
         except: 
             return False
 
+    def scan_for_subtitles(self, video_path):
+        self.detected_subs = {"None": None}
+        if not video_path or isinstance(video_path, dict):
+            self.update_sub_combo()
+            return
+
+        internal_subs = self.get_internal_subtitles(video_path)
+        for idx, label in internal_subs:
+            self.detected_subs[label] = f"internal:{idx}"
+
+        base_path = os.path.splitext(video_path)[0]
+        files = glob.glob(f"{glob.escape(base_path)}*.srt")
+        for f in files:
+            self.detected_subs[os.path.basename(f)] = f
+        
+        self.update_sub_combo()
+
+    def get_internal_subtitles(self, video_path):
+        cmd = [
+            "ffprobe", "-v", "error", "-select_streams", "s", 
+            "-show_entries", "stream=index:stream_tags=language,title", 
+            "-of", "csv=p=0", video_path
+        ]
+        subs = []
+        try:
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, timeout=5)
+            if result.stdout:
+                for line in result.stdout.strip().split('\n'):
+                    parts = line.split(',')
+                    index = parts[0]
+                    label = next((p for p in parts[1:] if p), f"Stream {index}")
+                    subs.append((index, f"Internal: {label}"))
+        except: pass
+        return subs
+
+    def update_sub_combo(self):
+        self.sub_combo['values'] = list(self.detected_subs.keys())
+        if len(self.detected_subs) > 1:
+            subs_only = [k for k in self.detected_subs.keys() if k != "None"]
+            first_sub = subs_only[0]
+            self.sub_selection_var.set(first_sub)
+            FFmpegStreamHandler.subtitle_file = self.detected_subs[first_sub]
+        else:
+            self.sub_selection_var.set("None")
+            FFmpegStreamHandler.subtitle_file = None
+
+    def on_subtitle_selected(self, event=None):
+        selected = self.sub_selection_var.get()
+        FFmpegStreamHandler.subtitle_file = self.detected_subs.get(selected)
+        if self.is_playing:
+            self.on_seek_release(None)
+
     def load_subtitles(self):
-        file = filedialog.askopenfilename(filetypes=[("Subtitle files", "*.srt")])
+        file = filedialog.askopenfilename(filetypes=[("Subtitle files", "*.srt *.ass")])
         if file:
-            self.selected_subtitles = file
-            self.sub_var.set(os.path.basename(file))
+            label = f"[Manual] {os.path.basename(file)}"
+            self.detected_subs[label] = file
+            self.update_sub_combo()
+            self.sub_selection_var.set(label)
             FFmpegStreamHandler.subtitle_file = file
+            if self.is_playing:
+                self.on_seek_release(None)
 
     def apply_styles(self):
         style = ttk.Style()
-        style.theme_use('clam')
+        style.theme_use('default')
         style.configure("TFrame", background=BG_COLOR)
         style.configure("TLabel", background=BG_COLOR, foreground=FG_COLOR, font=('Helvetica', 10))
         style.configure("TLabelframe", background=BG_COLOR, foreground=ACCENT_COLOR)
@@ -222,7 +336,7 @@ class ChromecastGui:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(main_frame, text="sakuraCast v1.0", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
+        ttk.Label(main_frame, text=f"sakuraCast [v{VERSION}]", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.CENTER)
 
         try:
             icon_image = tk.PhotoImage(file=ICON)
@@ -255,11 +369,16 @@ class ChromecastGui:
         ttk.Button(btn_frame, text="Add to Queue", command=self.add_to_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         ttk.Button(btn_frame, text="Clear Queue", command=self.clear_queue).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
-        sub_frame = ttk.LabelFrame(main_frame, text="Subtitles (Optional)", labelanchor='n')
+        sub_frame = ttk.LabelFrame(main_frame, text="Subtitles", labelanchor='n')
         sub_frame.pack(fill=tk.X, pady=10)
-        self.sub_var = tk.StringVar(value="No subtitles selected")
-        ttk.Label(sub_frame, textvariable=self.sub_var, font=('Helvetica', 9, 'italic')).pack(side=tk.LEFT, expand=True)
-        ttk.Button(sub_frame, text="Load SRT", command=self.load_subtitles).pack(side=tk.RIGHT)
+        
+        self.detected_subs = {"None": None}
+        self.sub_selection_var = tk.StringVar(value="None")
+        self.sub_combo = ttk.Combobox(sub_frame, textvariable=self.sub_selection_var, state="readonly")
+        self.sub_combo.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        self.sub_combo.bind("<<ComboboxSelected>>", self.on_subtitle_selected)
+
+        ttk.Button(sub_frame, text="Browse...", command=self.load_subtitles).pack(side=tk.RIGHT)
 
         ttk.Label(main_frame, text="Chromecast", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.device_list = tk.Listbox(main_frame, bg=SECONDARY_BG, fg=FG_COLOR, borderwidth=0, height=3)
@@ -278,7 +397,8 @@ class ChromecastGui:
         ttk.Label(main_frame, text="Aspect Ratio", font=('Helvetica', 10, 'bold'), foreground=ACCENT_COLOR).pack(anchor=tk.N)
         self.ar_options = {
             "Widescreen (16:9)": "16/9",
-            "Fullscreen (4:3)": "4/3"
+            "Fullscreen (4:3)": "4/3",
+            "Vertical (9:16)": "9/16"
         }
         self.ar_display_var = tk.StringVar(value="Widescreen (16:9)")
         self.ar_combo = ttk.Combobox(main_frame, textvariable=self.ar_display_var, values=list(self.ar_options.keys()), state="readonly")
@@ -321,7 +441,21 @@ class ChromecastGui:
 
         self.status_var = tk.StringVar(value="Searching for device(s)...")
         ttk.Label(main_frame, textvariable=self.status_var, foreground="#F8C8DC").pack(pady=5)
-        ttk.Label(main_frame, text="Made with love by faithvoid <3", foreground="#F8C8DC").pack(pady=5)
+        line_frame = ttk.Frame(main_frame)
+        line_frame.pack(pady=5)
+
+        ttk.Label(line_frame, text="made with love by faithvoid @", foreground="#F8C8DC").pack(side="left")
+
+        url_label = ttk.Label(line_frame, text="faithvoid.github.io", foreground="#F8C8DC", cursor="hand2")
+        url_label.pack(side="left")
+
+        kofi_frame = ttk.Frame(main_frame)
+        kofi_frame.pack()
+
+        url_label_ko_fi = ttk.Label(kofi_frame, text="ko-fi", foreground="#F8C8DC", cursor="hand2")
+        url_label_ko_fi.pack()
+
+        url_label_ko_fi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/videogirl95"))
 
     def update_ar(self, event=None):
         display_val = self.ar_display_var.get()
@@ -356,15 +490,34 @@ class ChromecastGui:
         def process_url():
             self.status_var.set("Processing URL...")
             try:
-                ydl_opts = {'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best','nocheckcertificate': True,'quiet': True,'no_warnings': False,'extractor_args': {'youtube': {'player_client': ['android', 'web']}} }
+                ydl_opts = {
+                    'format': 'bestvideo+bestaudio/best/b',
+                    'ignoreerrors': True,
+                    'nocheckcertificate': True,
+                    'quiet': False,
+                    'no_warnings': False,
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'extractor_args': {
+                        'youtube': {'player_client': ['android', 'web']},
+                        'nicovideo': {'player_client': ['watch_os', 'pc']}
+                    }
+                }
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
+
+                    if 'formats' in info:
+                        best_format = max(info['formats'], key=lambda f: f.get('height', 0) or 0)
+                        video_url = best_format['url']
+                    else:
+                        video_url = info['url']
+
                     self.queue.append({
-                        'path': info['url'],
+                        'path': video_url,
                         'title': info.get('title', 'Web Video'),
                         'duration': info.get('duration', 0)
                     })
+
                     self.root.after(0, lambda t=info.get('title', 'Web Video'): self.queue_listbox.insert(tk.END, f"[URL] {t}"))
                     self.url_var.set("")
                     self.status_var.set("URL added to queue.")
@@ -383,7 +536,7 @@ class ChromecastGui:
             self.chromecasts, self.browser = pychromecast.get_chromecasts()
             self.device_list.delete(0, tk.END)
             for cc in self.chromecasts: self.device_list.insert(tk.END, cc.name)
-            self.status_var.set(f"Found {len(self.chromecasts)} device(s).")
+            self.status_var.set(f"Found {len(self.chromecasts)} Chromecast(s).")
             self.btn_cast.config(state=tk.NORMAL)
         threading.Thread(target=task, daemon=True).start()
 
@@ -415,6 +568,9 @@ class ChromecastGui:
         self.title_var.set("No file playing")
         if self.cast_device: self.cast_device.media_controller.stop()
         if self.server: self.server.shutdown()
+
+        self.root.title(f"sakuraCast")
+    
         self.status_var.set("Stopped.")
         self.btn_cast.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
@@ -423,15 +579,18 @@ class ChromecastGui:
         if self.is_playing:
             self.stop_cast()
             time.sleep(0.5)
-            
+        
         selection = self.device_list.curselection()
         if not selection or not self.queue: return
-        
+    
         self.cast_device = self.chromecasts[selection[0]]
         self.is_playing = True
         self.btn_cast.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
         threading.Thread(target=self.playback_loop, daemon=True).start()
+
+        display_name = self.queue[0]['title'] if isinstance(self.queue[0], dict) else os.path.basename(self.queue[0])
+        self.root.title(f"sakuraCast - {display_name}")
 
     def playback_loop(self):
         try:
@@ -441,14 +600,21 @@ class ChromecastGui:
                 item = self.queue.popleft()
                 self.queue_listbox.delete(0)
 
+                FFmpegStreamHandler.subtitle_file = None
+                FFmpegStreamHandler.seek_time = 0
+                self.root.after(0, lambda: self.sub_selection_var.set("None"))
+
                 if isinstance(item, dict):
                     video_path = item['path']
                     display_name = item['title']
                     duration = item.get('duration', 0)
+                    FFmpegStreamHandler.headers_dict = item.get('headers', {}) 
                 else:
                     video_path = item
                     display_name = os.path.basename(item)
+                    self.root.after(0, lambda p=video_path: self.scan_for_subtitles(p))
                     duration = self.get_duration(item)
+                    FFmpegStreamHandler.headers_dict = {}
 
                 if not isinstance(item, dict):
                     self.generate_thumbnail(video_path)
@@ -475,7 +641,7 @@ class ChromecastGui:
                     metadata={
                         'metadataType': 1, 
                         'title': display_name, 
-                        'images': [{'url': f"http://{local_ip}:8000/thumb.jpg"}]
+#                        'images': [{'url': f"http://{local_ip}:8000/thumb.jpg"}]
                     }
                 )
 
