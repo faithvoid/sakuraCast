@@ -539,6 +539,18 @@ class ChromecastGui:
         url_label = ttk.Label(line_frame, text="faithvoid.github.io", foreground="#F8C8DC", cursor="hand2")
         url_label.pack(side="left")
 
+        kofi_label = ttk.Label(line_frame, text="[ko-fi]", foreground="#F8C8DC", cursor="hand2")
+        kofi_label.pack(side="left")
+
+    # Make the text itself clickable
+        kofi_label.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/videogirl95"))
+
+        patreon_label = ttk.Label(line_frame, text="[patreon]", foreground="#F8C8DC", cursor="hand2")
+        patreon_label.pack(side="left")
+
+    # Make the text itself clickable
+        patreon_label.bind("<Button-1>", lambda e: webbrowser.open("https://patreon.com/videogirl95"))
+
     def update_ar(self, event=None):
         display_val = self.ar_display_var.get()
         internal_val = self.ar_options.get(display_val, "16/9")
