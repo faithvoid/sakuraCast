@@ -611,11 +611,14 @@ class ChromecastGui:
         def task():
             self.chromecasts, self.browser = pychromecast.get_chromecasts()
             self.device_list.delete(0, tk.END)
-            for cc in self.chromecasts: self.device_list.insert(tk.END, cc.name)
+            for cc in self.chromecasts:
+                model_type = getattr(cc.cast_info, 'model_name', getattr(cc, 'model_name', 'Unknown'))
+                display_name = f"{cc.name} ({model_type})"
+                self.device_list.insert(tk.END, display_name)
+                
             self.status_var.set(f"Found {len(self.chromecasts)} Chromecast(s).")
             self.btn_cast.config(state=tk.NORMAL)
         threading.Thread(target=task, daemon=True).start()
-
     def on_seek_start(self, event):
         self.seeking = True
 
