@@ -5,8 +5,9 @@ Multiplatform Chromecast casting program written in Python using PyChromecast, w
 ![](screenshots/1.png)
 
 ## Features:
-- Support for custom aspect ratios and video resolutions for local and online videos!
-- True 4:3 video support for Chromecast devices connected to 4:3 displays, no more letterboxing! (Select 640x480 + Widescreen for the best results!)
+- Support for custom aspect ratios, video resolutions, and framerates for local and online videos!
+- True 4:3 video support for Chromecast devices connected to 4:3 displays, no more letterboxing! (Select 640x480 + Widescreen for the best results on a CRT!)
+- Overscan support!
 - Queue local and online videos so you can sit back, relax, and marathon your favourite movies and shows hassle-free!
 - Casting support from any yt-dlp supported site! (WIP)
 - Integrate subtitles directly into any video being cast, including a mode optimized for 4:3 CRTs when set to 640x480!
@@ -18,7 +19,7 @@ Multiplatform Chromecast casting program written in Python using PyChromecast, w
 - Install python-tk, python-pychromecast & yt-dlp (``` pip install pychromecast ``` + ``` pip install tk ``` + ``` pip install yt-dlp ```)
 - Open it and select your video file(s) or enter your video URL (URLs that end with file extensions or YouTube only!)
 - Select your subtitles, if required. If subtitles are found in the video container or share the same name as the video file, they'll show up automatically!
-- Select the Chromecast you'd like to cast the video to, and the aspect ratio you'd like to cast in (select 16/9 if you're using a 16/9 display or casting 4:3 content to a 4:3 display, use 4/3 if you're casting 4:3 content to a 16:9 display)
+- Select the Chromecast you'd like to cast the video to, and the aspect ratio you'd like to cast in (select 16/9 if you're using a 16/9 display or casting 4:3 content to a 4:3 display, use 4/3 if you're casting 4:3 content to a 16:9 display) as well as the resolution (and framerate if applicable). Note that the higher the resolution/framerate, the higher the system usage on your host PC.
 - Select "Cast" and you're all set! This script will detect if you have hardware acceleration and use that to transcode the video, otherwise, will fall back to software transcoding.
 
 ## Bugs:
