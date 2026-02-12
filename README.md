@@ -9,7 +9,7 @@ Multiplatform Chromecast casting program written in Python using pychromecast, f
 - True 4:3 video support for Chromecast devices connected to 4:3 displays, no more letterboxing! (Select 640x480 + Widescreen for the best results on a CRT!)
 - Overscan support!
 - Queue local and online videos so you can sit back, relax, and marathon your favourite movies and shows hassle-free!
-- Casting support from any yt-dlp supported site! (WIP)
+- Casting support from any yt-dlp supported site, with resolution-specific video grabbing, meaning you can save bandwith and computational resources at lower resolutions! (WIP)
 - Integrate subtitles directly into any video being cast, including a mode optimized for 4:3 CRTs when set to 640x480!
 - Multiplatform support! (Tested in Linux & macOS, should work on Windows!)
 
