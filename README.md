@@ -16,7 +16,7 @@ Multiplatform Chromecast casting program written in Python using pychromecast, f
 
 ## Requirements:
 - Decent PC capable of transcoding (will fall back to software if hardware transcoding isn't available, but it won't be pretty). With h264_vaapi on Linux, casting 640x480 Widescreen 30FPS video to a 1st Gen Chromecast, uses approximately 10% of my i7-6500U CPU.
-- Google Chromecast
+- Google Chromecast (made with first-gen Chromecasts in mind, but will work on any model!)
 
 ## How to use:
 - Download the latest release of sakuraCast
