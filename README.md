@@ -52,3 +52,6 @@ Multiplatform Chromecast casting program written in Python using pychromecast, f
 - [ ] Optimizations and bugfixes
 - [ ] Fix cast metadata overall
 - [ ] Implement a webserver for sending files and URLs and commands to(?)
+
+## Credits:
+- ffmpeg + yt-dlp + pychromecast teams
