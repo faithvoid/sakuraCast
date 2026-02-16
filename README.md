@@ -40,7 +40,7 @@ Multiplatform Chromecast casting program written in Python using pychromecast, f
 - Nope, only local files and DRM-free websites supported by yt-dlp are supported, sorry!
 
 ## Bugs:
-- Seeking is a bit glitchy in the UI, but works. Seeking doesn't work in Google Home, unfortunately.
+- Seeking is a bit glitchy in the UI, but works. Seeking doesn't work in Google Home, unfortunately. If you seek too many times in a very short period (ie; 5 seeks in 5 seconds), the stream may quietly fail. 
 - Thumbnail image doesn't work in Google Home
 - Sometimes stopping a stream requires a restart of the script.
 
